@@ -44,6 +44,156 @@ is_playing = False
 async def on_ready():
     print(f'Bot angemeldet als {bot.user}')
     await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name="auf Befehle"))
+    
+    # Sende die Abmeldungs-Embeds beim Start
+    await send_abmeldungs_embeds()
+
+# ==================== Abmeldungs-Embeds ====================
+async def send_abmeldungs_embeds():
+    """Sendet die Abmeldungs-Embeds in die entsprechenden Channels"""
+    
+    # Discord-Team Abmeldung
+    discord_channel = bot.get_channel(config['CHANNELS']['discordTeamAbmelden'])
+    if discord_channel:
+        try:
+            # Lösche alte Nachrichten
+            async for msg in discord_channel.history(limit=100):
+                if msg.author == bot.user:
+                    await msg.delete()
+            
+            embed = discord.Embed(
+                title="🔔 Discord-Team Abmeldung",
+                description="Klicke auf den Button um dich abzumelden!",
+                color=discord.Color.blurple(),
+                timestamp=datetime.now()
+            )
+            embed.set_footer(text="Abmeldungssystem")
+            
+            view = AbmeldungsView(team_type="discord")
+            await discord_channel.send(embed=embed, view=view)
+            print("✅ Discord-Team Abmeldungs-Embed gesendet")
+        except Exception as e:
+            print(f"❌ Fehler beim Senden des Discord-Team Embeds: {e}")
+    
+    # Twitch-Team Abmeldung
+    twitch_channel = bot.get_channel(config['CHANNELS']['twitchTeamAbmelden'])
+    if twitch_channel:
+        try:
+            # Lösche alte Nachrichten
+            async for msg in twitch_channel.history(limit=100):
+                if msg.author == bot.user:
+                    await msg.delete()
+            
+            embed = discord.Embed(
+                title="🔔 Twitch-Team Abmeldung",
+                description="Klicke auf den Button um dich abzumelden!",
+                color=discord.Color.purple(),
+                timestamp=datetime.now()
+            )
+            embed.set_footer(text="Abmeldungssystem")
+            
+            view = AbmeldungsView(team_type="twitch")
+            await twitch_channel.send(embed=embed, view=view)
+            print("✅ Twitch-Team Abmeldungs-Embed gesendet")
+        except Exception as e:
+            print(f"❌ Fehler beim Senden des Twitch-Team Embeds: {e}")
+
+# ==================== Abmeldungs-Modal ====================
+class AbmeldungsModal(discord.ui.Modal, title="Team Abmeldung"):
+    von = discord.ui.TextInput(
+        label="Von (z.B. 14:00)",
+        placeholder="HH:MM",
+        required=True,
+        min_length=5,
+        max_length=5
+    )
+    bis = discord.ui.TextInput(
+        label="Bis (z.B. 18:00)",
+        placeholder="HH:MM",
+        required=True,
+        min_length=5,
+        max_length=5
+    )
+    grund = discord.ui.TextInput(
+        label="Grund (optional)",
+        placeholder="Dein Grund hier...",
+        required=False,
+        style=discord.TextStyle.paragraph,
+        max_length=500
+    )
+    
+    team_type = None
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            # Validierung der Zeiten
+            try:
+                von_h, von_m = map(int, self.von.value.split(':'))
+                bis_h, bis_m = map(int, self.bis.value.split(':'))
+                
+                if not (0 <= von_h <= 23 and 0 <= von_m <= 59):
+                    await interaction.response.send_message("❌ Ungültige Von-Zeit! Format: HH:MM", ephemeral=True)
+                    return
+                if not (0 <= bis_h <= 23 and 0 <= bis_m <= 59):
+                    await interaction.response.send_message("❌ Ungültige Bis-Zeit! Format: HH:MM", ephemeral=True)
+                    return
+            except ValueError:
+                await interaction.response.send_message("❌ Ungültiges Zeitformat! Verwende HH:MM", ephemeral=True)
+                return
+            
+            # Bestätige die Abmeldung dem User
+            await interaction.response.send_message("✅ Deine Abmeldung wurde registriert!", ephemeral=True)
+            
+            # Sende Log-Embed
+            if self.team_type == "discord":
+                info_role_id = config['ROLES']['discordInfoRole']
+                log_channel_id = config['CHANNELS']['discordTeamAbmelden']
+                team_name = "Discord-Team"
+            else:
+                info_role_id = config['ROLES']['twitchInfoRole']
+                log_channel_id = config['CHANNELS']['twitchTeamAbmelden']
+                team_name = "Twitch-Team"
+            
+            embed = discord.Embed(
+                title=f"📋 {team_name} - Neue Abmeldung",
+                description=f"**User:** {interaction.user.mention}\n**Von:** {self.von.value}\n**Bis:** {self.bis.value}",
+                color=discord.Color.yellow(),
+                timestamp=datetime.now()
+            )
+            
+            if self.grund.value:
+                embed.add_field(name="Grund", value=self.grund.value, inline=False)
+            
+            embed.set_footer(text=f"User-ID: {interaction.user.id}")
+            embed.set_thumbnail(url=interaction.user.avatar.url if interaction.user.avatar else None)
+            
+            # Finde und sende an den Info-Channel
+            info_channel = bot.get_channel(log_channel_id)
+            if info_channel:
+                # Mention der Role
+                info_role = interaction.guild.get_role(info_role_id)
+                if info_role:
+                    await info_channel.send(f"{info_role.mention}", embed=embed)
+                else:
+                    await info_channel.send(embed=embed)
+                print(f"✅ Abmeldung geloggt für {team_name}")
+            
+        except Exception as e:
+            print(f"❌ Fehler beim Verarbeiten der Abmeldung: {e}")
+            await interaction.response.send_message(f"❌ Ein Fehler ist aufgetreten: {e}", ephemeral=True)
+
+# ==================== Abmeldungs-View (Button) ====================
+class AbmeldungsView(discord.ui.View):
+    def __init__(self, team_type="discord"):
+        super().__init__(persistent=True)
+        self.team_type = team_type
+    
+    @discord.ui.button(label="Abmelden", style=discord.ButtonStyle.danger, emoji="🔔", custom_id="abmeldungs_button")
+    async def abmelden_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Erstelle Modal
+        modal = AbmeldungsModal()
+        modal.team_type = self.team_type
+        await interaction.response.send_modal(modal)
 
 # ==================== MangoGPT ====================
 @bot.event
@@ -155,39 +305,6 @@ async def musik_stop(interaction: discord.Interaction):
         color=discord.Color.orange()
     )
     await log_mod(embed)
-
-# ==================== Team-Abmeldung ====================
-class AbmeldungsModal(discord.ui.Modal, title="Team Abmeldung"):
-    von = discord.ui.TextInput(label="Von (z.B. 14:00)", placeholder="HH:MM", required=True)
-    bis = discord.ui.TextInput(label="Bis (z.B. 18:00)", placeholder="HH:MM", required=True)
-    grund = discord.ui.TextInput(label="Grund (optional)", required=False, style=discord.TextStyle.paragraph)
-    
-    async def on_submit(self, interaction: discord.Interaction):
-        embed = discord.Embed(
-            title="🔔 Team-Abmeldung",
-            description=f"**User:** {interaction.user.mention}\n**Von:** {self.von.value}\n**Bis:** {self.bis.value}\n**Grund:** {self.grund.value or 'Keine Angabe'}",
-            color=discord.Color.yellow(),
-            timestamp=datetime.now()
-        )
-        
-        await interaction.response.send_message("✅ Abmeldung registriert!", ephemeral=True)
-        await log_mod(embed)
-
-@bot.tree.command(name="discord-team-abmelden", description="Melde dich vom Discord-Team ab")
-async def discord_team_abmelden(interaction: discord.Interaction):
-    if not discord.utils.get(interaction.user.roles, id=config['ROLES']['discordTeamRole']):
-        await interaction.response.send_message("❌ Du bist nicht im Discord-Team!", ephemeral=True)
-        return
-    
-    await interaction.response.send_modal(AbmeldungsModal())
-
-@bot.tree.command(name="twitch-team-abmelden", description="Melde dich vom Twitch-Team ab")
-async def twitch_team_abmelden(interaction: discord.Interaction):
-    if not discord.utils.get(interaction.user.roles, id=config['ROLES']['twitchTeamRole']):
-        await interaction.response.send_message("❌ Du bist nicht im Twitch-Team!", ephemeral=True)
-        return
-    
-    await interaction.response.send_modal(AbmeldungsModal())
 
 # ==================== Logging-Funktionen ====================
 async def log_messages(before, after):
