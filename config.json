@@ -1,0 +1,28 @@
+{
+  "TOKEN": "DEIN_BOT_TOKEN_HIER",
+  "CHANNELS": {
+    "mangoGPT": 1530191358784962630,
+    "musik": 1529647908280864958,
+    "discordTeamAbmelden": 1529648012484280421,
+    "twitchTeamAbmelden": 1529648040573403177,
+    "messagesLog": 1529647951666745364,
+    "memberLog": 1529647957044101211,
+    "rolesLog": 1529680162721890425,
+    "serverLog": 1529647962832244736,
+    "voiceLog": 1530625832106852614,
+    "modLog": 1529647946302361774
+  },
+  "ROLES": {
+    "discordTeamRole": 1529647541094715425,
+    "twitchTeamRole": 1529647546694369380,
+    "discordInfoRole": 1529647489270022244,
+    "twitchInfoRole": 1529647520655872131,
+    "djAccessRole1": 1529284983896801444,
+    "djAccessRole2": 1529647436195434517
+  },
+  "OWNER_ID": 1350491332413620426,
+  "MUSIC": {
+    "defaultStation": "Radio Bollerwagen",
+    "defaultStreamUrl": "https://stream.radiotagesschau.de/radiobollerwagen"
+  }
+}
